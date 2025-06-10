@@ -5,7 +5,7 @@ from kafka import KafkaProducer
 from datetime import datetime
 
 # Kafka config
-KAFKA_BROKER = "kafka:9092"
+KAFKA_BROKER = "localhost:9092"
 TOPIC = "market_data_raw"  # This topic matches the one consumed by the database ingestion script
 
 # Try to connect to Kafka with retries (e.g., when container starts before Kafka is ready)
@@ -29,17 +29,30 @@ else:
 tickers = ["AAPL", "GOOG", "MSFT", "AMZN", "TSLA"]  # I selected a few high-volume S&P 500 stocks for testing
 
 def fetch_price_data(ticker):
-    stock = yf.Ticker(ticker)
-    data = stock.history(period="1d", interval="1m").tail(1)  # Get the latest 1-minute bar
-    if not data.empty:
+    try:
+        stock = yf.Ticker(ticker)
+        # Using 1m interval can fail outside trading hours, so we fallback to daily if needed
+        data = stock.history(period="1d", interval="1m").tail(1)
+
+        if data.empty:
+            print(f"{ticker}: No 1-min data available. Trying daily interval...")
+            data = stock.history(period="5d", interval="1d").tail(1)
+            if data.empty:
+                print(f"{ticker}: No daily data available either. Skipping.")
+                return None
+
         latest = data.iloc[0]
         return {
-            "timestamp": datetime.utcnow().isoformat(),  # Using UTC to keep all timestamps consistent
+            "timestamp": datetime.utcnow().isoformat(),
             "ticker": ticker,
             "price": round(latest["Close"], 2),
             "volume": int(latest["Volume"])
         }
-    return None  # If no data is returned (e.g., market closed), skip
+
+    except Exception as e:
+        print(f"⚠️ Error fetching data for {ticker}: {e}")
+        return None
+
 
 def main():
     while True:
