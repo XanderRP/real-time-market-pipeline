@@ -1,0 +1,56 @@
+Step-by-Step Plan
+Step 1: Project Setup
+Tech Stack: Kafka, Python, Spark, PostgreSQL, BigQuery, Airflow, Metabase
+
+Create a GitHub repo: real-time-market-pipeline
+
+Set up local Docker containers for Kafka, PostgreSQL, Airflow, and Metabase using docker-compose
+
+Step 2: Simulate Real-Time Market Data
+Write a Python script that fetches or simulates stock price data every second (e.g., using yfinance or synthetic random walk).
+
+Send records to a Kafka topic market_data_raw in real-time (confluent-kafka or kafka-python)
+
+Step 3: Build Kafka Consumer & Spark Job
+Set up a Kafka consumer in Spark Structured Streaming (in Python or Scala)
+
+Parse and transform the data (e.g., JSON to structured format, calculate moving averages or volatility)
+
+Output to:
+
+PostgreSQL for transactional data
+
+BigQuery for analytical/archival data
+
+Step 4: Schedule ETL with Airflow
+Use Airflow (via Docker) to:
+
+Orchestrate Spark jobs
+
+Move data daily/hourly from PostgreSQL to BigQuery (or vice versa)
+
+Backfill past simulated days
+
+Define DAGs with retries, email alerts, and metadata logging
+
+Step 5: Create Metabase Dashboards
+Connect Metabase to PostgreSQL and BigQuery
+
+Build 5 dashboards:
+
+Ticker Summary
+
+Price Volatility Heatmap
+
+Volume Trends
+
+Top Gainers/Losers
+
+Custom Report Export (automated weekly)
+
+Step 6: Documentation
+Write a README: architecture diagram, tooling, instructions
+
+Use dbt for model transformations (optional polish)
+
+Record a short Loom or blog post demo
