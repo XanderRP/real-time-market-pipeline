@@ -1,44 +1,55 @@
 import yfinance as yf
 import json
 import time
+import signal
+import sys
 from kafka import KafkaProducer
 from datetime import datetime
 
-# Kafka config
-KAFKA_BROKER = "localhost:9092"
-TOPIC = "market_data_raw"  # This topic matches the one consumed by the database ingestion script
+# Kafka configuration
+BROKER = ["kafka:9092"]
+TOPIC = "market_data_raw"
 
-# Try to connect to Kafka with retries (e.g., when container starts before Kafka is ready)
-# I added retries here to make sure the script waits for Kafka to be fully initialized
+# Tickers to simulate
+TICKERS = ["AAPL", "GOOG", "MSFT", "AMZN", "TSLA"]
+
+# Connect to Kafka with retries
 producer = None
 for attempt in range(10):
     try:
         producer = KafkaProducer(
-            bootstrap_servers=KAFKA_BROKER,
-            value_serializer=lambda v: json.dumps(v).encode("utf-8")  # Ensures messages are JSON-encoded
+            bootstrap_servers=BROKER,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8")
         )
-        print("✅ Connected to Kafka broker.")
+        print("✅ Connected to Kafka")
         break
     except Exception as e:
         print(f"⏳ Kafka not ready yet (attempt {attempt + 1}/10): {e}")
         time.sleep(3)
 else:
-    raise RuntimeError("❌ Failed to connect to Kafka after 10 attempts.")
+    raise RuntimeError("❌ Couldn't connect to Kafka after 10 attempts.")
 
-# List of tickers to monitor
-tickers = ["AAPL", "GOOG", "MSFT", "AMZN", "TSLA"]  # I selected a few high-volume S&P 500 stocks for testing
+# Shutdown handler to flush Kafka queue
+def shutdown(signum, frame):
+    print("\n🛑 Shutting down producer...")
+    if producer:
+        producer.flush()
+        producer.close()
+    sys.exit(0)
 
-def fetch_price_data(ticker):
+signal.signal(signal.SIGINT, shutdown)
+signal.signal(signal.SIGTERM, shutdown)
+
+def fetch_price(ticker):
     try:
         stock = yf.Ticker(ticker)
-        # Using 1m interval can fail outside trading hours, so we fallback to daily if needed
         data = stock.history(period="1d", interval="1m").tail(1)
 
         if data.empty:
-            print(f"{ticker}: No 1-min data available. Trying daily interval...")
+            print(f"{ticker}: No 1m data — falling back to daily...")
             data = stock.history(period="5d", interval="1d").tail(1)
             if data.empty:
-                print(f"{ticker}: No daily data available either. Skipping.")
+                print(f"{ticker}: No daily data either — skipping.")
                 return None
 
         latest = data.iloc[0]
@@ -49,24 +60,21 @@ def fetch_price_data(ticker):
             "volume": int(latest["Volume"])
         }
 
-    except Exception as e:
-        print(f"⚠️ Error fetching data for {ticker}: {e}")
+    except Exception as err:
+        print(f"⚠️ Error fetching data for {ticker}: {err}")
         return None
-
 
 def main():
     while True:
-        for ticker in tickers:
-            data = fetch_price_data(ticker)
+        for ticker in TICKERS:
+            data = fetch_price(ticker)
             if data:
                 try:
-                    # Send the data to Kafka asynchronously
-                    future = producer.send(TOPIC, value=data)
-                    result = future.get(timeout=10)  # Wait for confirmation to catch send failures
-                    print(f"✅ Sent: {data}")
+                    producer.send(TOPIC, value=data).get(timeout=10)
+                    print(f"📤 Sent: {data}")
                 except Exception as e:
-                    print(f"❌ Failed to send: {e}")
-        time.sleep(60)  # Fetch data every minute to align with yfinance 1-min intervals
+                    print(f"❌ Failed to send {ticker}: {e}")
+        time.sleep(60)  # Wait 1 minute before next fetch
 
 if __name__ == "__main__":
-    main()  # Main loop runs forever; in production I’d implement graceful shutdowns
+    main()

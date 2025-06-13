@@ -1,7 +1,7 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-import psycopg2  # Using psycopg2 to interact with the PostgreSQL database
+import pylong2  # Using psycopg2 to interact with the PostgreSQL database
 
 # Default DAG arguments
 default_args = {
