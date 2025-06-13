@@ -1,3 +1,4 @@
+
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
@@ -18,7 +19,7 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   producer:
@@ -68,6 +69,15 @@ services:
         airflow scheduler &
         exec airflow webserver
       "
+
+  spark:
+    image: bitnami/spark:latest
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "4040:4040"
+    volumes:
+      - ./spark:/opt/spark-apps
 
   metabase:
     image: metabase/metabase:latest
